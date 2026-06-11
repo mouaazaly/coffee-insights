@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import Database from 'better-sqlite3';
+import { DatabaseSync as Database } from 'node:sqlite';
 import { askAgent } from '../src/agent.js';
 
 function makeDb() {
@@ -18,13 +18,12 @@ function makeDb() {
   const stmt = db.prepare(
     'INSERT INTO transactions (date, item, amount, customer_id) VALUES (?, ?, ?, ?)'
   );
-  const seed = db.transaction(() => {
-    stmt.run('2024-03-01', 'Latte', 4.75, 'c1');
-    stmt.run('2024-03-01', 'Latte', 4.75, 'c1');
-    stmt.run('2024-03-02', 'Espresso', 3.00, 'c2');
-    stmt.run('2024-03-02', 'Cold Brew', 5.00, 'c3');
-  });
-  seed();
+  db.exec('BEGIN');
+  stmt.run('2024-03-01', 'Latte', 4.75, 'c1');
+  stmt.run('2024-03-01', 'Latte', 4.75, 'c1');
+  stmt.run('2024-03-02', 'Espresso', 3.00, 'c2');
+  stmt.run('2024-03-02', 'Cold Brew', 5.00, 'c3');
+  db.exec('COMMIT');
   return db;
 }
 

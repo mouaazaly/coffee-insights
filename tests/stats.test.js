@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import { DatabaseSync as Database } from 'node:sqlite';
 import {
   getRevenueByDay,
   getTopItems,
@@ -31,10 +31,9 @@ function insertTx(db, rows) {
   const stmt = db.prepare(
     'INSERT INTO transactions (date, item, amount, customer_id) VALUES (?, ?, ?, ?)'
   );
-  const run = db.transaction(() => {
-    for (const [date, item, amount, cid] of rows) stmt.run(date, item, amount, cid);
-  });
-  run();
+  db.exec('BEGIN');
+  for (const [date, item, amount, cid] of rows) stmt.run(date, item, amount, cid);
+  db.exec('COMMIT');
 }
 
 // ---------------------------------------------------------------------------

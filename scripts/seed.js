@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 const DB_PATH    = join(__dirname, '..', 'data', 'coffee.db');
 
-// --- Customer data ---
 const CUSTOMERS = [
   { id: 'cust_001', name: 'Alice Chen',        email: 'alice@example.com' },
   { id: 'cust_002', name: 'Ben Torres',        email: 'ben@example.com' },
@@ -88,8 +87,7 @@ function makeWeightedPicker(items, weights) {
 function buildDatePool() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dates = [];
-  const weights = [];
+  const dates = [], weights = [];
   for (let i = 59; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
@@ -101,14 +99,10 @@ function buildDatePool() {
   return makeWeightedPicker(dates, weights);
 }
 
-// Exported so src/db.js can call it on first boot (Azure has no seed step)
 export function seedDatabase(db) {
   const pickCustomer = makeWeightedPicker(CUSTOMERS, CUSTOMER_WEIGHTS);
   const pickMenuItem = makeWeightedPicker(MENU, MENU.map(m => m.weight));
   const pickDate     = buildDatePool();
-
-  db.prepare('DELETE FROM transactions').run();
-  db.prepare('DELETE FROM customers').run();
 
   const insertCustomer = db.prepare(
     'INSERT INTO customers (customer_id, name, email) VALUES (?, ?, ?)'
@@ -117,20 +111,35 @@ export function seedDatabase(db) {
     'INSERT INTO transactions (date, item, amount, customer_id) VALUES (?, ?, ?, ?)'
   );
 
-  db.transaction(() => {
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM transactions').run();
+    db.prepare('DELETE FROM customers').run();
     for (const c of CUSTOMERS) insertCustomer.run(c.id, c.name, c.email);
     for (let i = 0; i < 200; i++) {
       const customer = pickCustomer();
       const menuItem = pickMenuItem();
       insertTx.run(pickDate(), menuItem.item, menuItem.amount, customer.id);
     }
-  })();
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
 }
 
-// Only runs when invoked directly: node scripts/seed.js
 if (process.argv[1] === __filename) {
   mkdirSync(join(__dirname, '..', 'data'), { recursive: true });
-  const db = new Database(DB_PATH);
+  const db = new DatabaseSync(DB_PATH);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS customers (
+      customer_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
+      item TEXT NOT NULL, amount REAL NOT NULL, customer_id TEXT NOT NULL
+    );
+  `);
   seedDatabase(db);
   const { n } = db.prepare('SELECT COUNT(*) AS n FROM transactions').get();
   console.log(`Seeded ${n} transactions into ${DB_PATH}`);
