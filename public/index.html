@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coffee Shop Insights</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #faf7f4;
+      color: #2d1a0e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #3b1f0d;
+      color: #f5e6d3;
+      padding: 1.2rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 0.01em; }
+    header .logo { font-size: 1.6rem; }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 1.5rem 3rem;
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    /* KPI row */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .kpi-card {
+      background: #fff;
+      border: 1px solid #e8ddd5;
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+    }
+    .kpi-card .label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #7a5c45;
+    }
+    .kpi-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #3b1f0d;
+      margin-top: 0.25rem;
+    }
+
+    /* Two-column area: chart + top items */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+    @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e8ddd5;
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+    }
+    .card h2 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #7a5c45;
+      margin-bottom: 1rem;
+    }
+
+    /* Top items */
+    .top-items-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+    .top-items-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.88rem;
+    }
+    .top-items-list .item-name { font-weight: 500; }
+    .top-items-list .item-meta { color: #7a5c45; font-size: 0.8rem; }
+
+    /* AI summary */
+    .summary-text {
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: #3b2510;
+      font-style: italic;
+      min-height: 3rem;
+    }
+    .summary-text.loading { color: #a08070; font-style: normal; }
+
+    /* Q&A */
+    .qa-form {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .qa-form input {
+      flex: 1;
+      padding: 0.6rem 0.9rem;
+      border: 1px solid #c9b8a8;
+      border-radius: 7px;
+      font-size: 0.9rem;
+      background: #faf7f4;
+      color: #2d1a0e;
+      outline: none;
+    }
+    .qa-form input:focus { border-color: #6f4e37; }
+    .qa-form button {
+      padding: 0.6rem 1.4rem;
+      background: #6f4e37;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .qa-form button:hover:not(:disabled) { background: #3b1f0d; }
+    .qa-form button:disabled { background: #b09080; cursor: not-allowed; }
+
+    .answer-box {
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: #2d1a0e;
+      min-height: 1.5rem;
+    }
+    .answer-box.error { color: #b03000; }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="logo">&#9749;</span>
+    <h1>Coffee Shop Insights</h1>
+  </header>
+
+  <main>
+    <!-- KPI cards -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="label">Average Ticket</div>
+        <div class="value" id="avg-ticket">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Repeat Customer Rate</div>
+        <div class="value" id="repeat-rate">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Total Transactions</div>
+        <div class="value" id="total-txns">—</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Unique Customers</div>
+        <div class="value" id="unique-customers">—</div>
+      </div>
+    </div>
+
+    <!-- Chart + top items -->
+    <div class="grid-2">
+      <div class="card">
+        <h2>Revenue by Day</h2>
+        <canvas id="revenue-chart" height="220"></canvas>
+      </div>
+      <div class="card">
+        <h2>Top Items</h2>
+        <ul class="top-items-list" id="top-items"></ul>
+      </div>
+    </div>
+
+    <!-- AI summary -->
+    <div class="card">
+      <h2>AI Business Summary</h2>
+      <p class="summary-text loading" id="ai-summary">Loading insights…</p>
+    </div>
+
+    <!-- Q&A -->
+    <div class="card">
+      <h2>Ask a Question</h2>
+      <div class="qa-form">
+        <input
+          type="text"
+          id="question-input"
+          placeholder="e.g. Which day had the highest revenue?"
+        />
+        <button id="ask-btn">Ask</button>
+      </div>
+      <div class="answer-box" id="answer"></div>
+    </div>
+  </main>
+
+  <script>
+    async function init() {
+      const stats = await fetch('/api/stats').then(r => r.json());
+
+      // KPI cards
+      document.getElementById('avg-ticket').textContent =
+        '$' + stats.averageTicket.averageTicket.toFixed(2);
+      document.getElementById('repeat-rate').textContent =
+        (stats.repeatCustomerRate.rate * 100).toFixed(1) + '%';
+      document.getElementById('unique-customers').textContent =
+        stats.repeatCustomerRate.totalCustomers;
+
+      const totalTxns = stats.revenueByDay.reduce((s, r) => s, 0);
+      // derive total from top items count sum
+      const totalCount = stats.topItems.reduce((s, i) => s + i.count, 0);
+      document.getElementById('total-txns').textContent = totalCount;
+
+      // Top items list
+      const ul = document.getElementById('top-items');
+      stats.topItems.forEach((item, idx) => {
+        const li = document.createElement('li');
+        li.innerHTML =
+          `<span class="item-name">${idx + 1}. ${item.item}</span>` +
+          `<span class="item-meta">$${item.totalRevenue.toFixed(2)} &middot; ${item.count} orders</span>`;
+        ul.appendChild(li);
+      });
+
+      // Revenue chart
+      const ctx = document.getElementById('revenue-chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: stats.revenueByDay.map(r => r.date.slice(5)),
+          datasets: [{
+            label: 'Revenue ($)',
+            data: stats.revenueByDay.map(r => r.revenue),
+            backgroundColor: '#6f4e37',
+            hoverBackgroundColor: '#3b1f0d',
+            borderRadius: 3,
+          }],
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              ticks: {
+                maxTicksLimit: 15,
+                font: { size: 11 },
+                color: '#7a5c45',
+              },
+              grid: { display: false },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { font: { size: 11 }, color: '#7a5c45' },
+              grid: { color: '#ede3da' },
+            },
+          },
+        },
+      });
+
+      // AI summary (non-blocking — loads after chart)
+      fetch('/api/insights')
+        .then(r => r.json())
+        .then(data => {
+          const el = document.getElementById('ai-summary');
+          el.textContent = data.summary;
+          el.classList.remove('loading');
+        })
+        .catch(() => {
+          const el = document.getElementById('ai-summary');
+          el.textContent = 'Could not load AI summary. Check your GROQ_API_KEY.';
+          el.classList.remove('loading');
+        });
+    }
+
+    // Q&A handler
+    document.getElementById('ask-btn').addEventListener('click', async () => {
+      const input = document.getElementById('question-input');
+      const question = input.value.trim();
+      if (!question) return;
+
+      const btn = document.getElementById('ask-btn');
+      const answerEl = document.getElementById('answer');
+      btn.disabled = true;
+      btn.textContent = 'Thinking…';
+      answerEl.textContent = '';
+      answerEl.className = 'answer-box';
+
+      try {
+        const resp = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question }),
+        });
+        const data = await resp.json();
+        if (data.error) {
+          answerEl.textContent = 'Error: ' + data.error;
+          answerEl.classList.add('error');
+        } else {
+          answerEl.textContent = data.answer;
+        }
+      } catch {
+        answerEl.textContent = 'Network error — is the server running?';
+        answerEl.classList.add('error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Ask';
+      }
+    });
+
+    document.getElementById('question-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('ask-btn').click();
+    });
+
+    init().catch(console.error);
+  </script>
+</body>
+</html>
